@@ -6,7 +6,7 @@ import re
 from urllib.parse import urljoin
 import json
 
-class ShadliqScraperV2:
+class ShadliqScraperFinal:
     def __init__(self):
         self.base_url = "https://shadliq.az"
         self.session = requests.Session()
@@ -14,9 +14,10 @@ class ShadliqScraperV2:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
         self.venues = []
+        self.listing_data = {}  # Store price and location from listing pages
 
     def scrape_listing_page(self, page_num):
-        """Scrape a single listing page to get venue URLs and basic info"""
+        """Scrape a listing page to get venue URLs and basic info (price, location)"""
         url = f"{self.base_url}/az/saray-restoranlar/{page_num}/"
         print(f"Scraping listing page {page_num}: {url}")
 
@@ -27,19 +28,59 @@ class ShadliqScraperV2:
 
             venue_links = []
 
-            # Find venue links from articles/cards
-            for link in soup.find_all('a', href=True):
-                href = link.get('href', '')
-                # Filter for venue detail pages
-                if '/az/' in href and href.count('/') >= 3 and not any(x in href for x in ['/saray-restoranlar/', '/page/', '/category/', '?', '#']):
-                    full_url = urljoin(self.base_url, href)
-                    if full_url not in venue_links and full_url.startswith(self.base_url):
-                        # Exclude non-venue pages
-                        excluded_keywords = ['elaqe', 'videolar', 'meslehetler', 'gelinlikler', 'gozellik-salonlari', 'toy-masini', 'dekorasiya-dizayn', 'reqs-qruplari']
-                        if not any(keyword in full_url for keyword in excluded_keywords):
-                            venue_links.append(full_url)
+            # Find venue cards using the correct selector
+            venue_blocks = soup.find_all('div', class_='block_similar')
 
-            # Remove duplicates
+            for block in venue_blocks:
+                # Find the main link (in block_title)
+                block_title = block.find('div', class_='block_title')
+                if not block_title:
+                    continue
+
+                link = block_title.find('a', href=True)
+                if not link:
+                    continue
+
+                href = link.get('href', '')
+
+                # Filter for venue detail pages
+                if '/az/' in href and href.count('/') >= 3:
+                    full_url = urljoin(self.base_url, href)
+
+                    # Exclude non-venue pages
+                    excluded_keywords = ['elaqe', 'videolar', 'meslehetler', 'gelinlikler',
+                                        'gozellik-salonlari', 'toy-masini', 'dekorasiya-dizayn',
+                                        'reqs-qruplari', 'saray-restoranlar']
+
+                    if any(keyword in full_url for keyword in excluded_keywords):
+                        continue
+
+                    if full_url.startswith(self.base_url) and full_url not in venue_links:
+                        venue_links.append(full_url)
+
+                        # Extract price from address-place paragraph
+                        price_p = block_title.find('p', class_='address-place')
+                        price = ''
+                        if price_p:
+                            price_text = price_p.get_text(strip=True)
+                            # Extract just the number(s)
+                            price_match = re.search(r'(\d+(?:-\d+)?)', price_text)
+                            if price_match:
+                                price = price_match.group(1)
+
+                        # Extract location from map marker paragraph
+                        location = ''
+                        map_marker = block_title.find('i', class_='fa-map-marker')
+                        if map_marker and map_marker.parent:
+                            location = map_marker.parent.get_text(strip=True)
+
+                        # Store this info
+                        self.listing_data[full_url] = {
+                            'listing_price': price,
+                            'listing_location': location
+                        }
+
+            # Remove duplicates while preserving order
             venue_links = list(dict.fromkeys(venue_links))
 
             print(f"  Found {len(venue_links)} venue links on page {page_num}")
@@ -68,6 +109,7 @@ class ShadliqScraperV2:
             'latitude': '',
             'longitude': '',
             'price_per_person': '',
+            'location_short': '',
             'views': '',
             'description': '',
             'hall_names': '',
@@ -76,6 +118,11 @@ class ShadliqScraperV2:
             'gallery_images': '',
             'meta_description': ''
         }
+
+        # Get price and location from listing page data
+        if url in self.listing_data:
+            venue_data['price_per_person'] = self.listing_data[url]['listing_price']
+            venue_data['location_short'] = self.listing_data[url]['listing_location']
 
         try:
             response = self.session.get(url, timeout=30)
@@ -87,12 +134,12 @@ class ShadliqScraperV2:
             if h1:
                 venue_data['name'] = self.extract_text_safe(h1)
 
-            # 2. Extract phone - look specifically in address_info section
+            # 2. Extract phone
             phone_links = soup.find_all('a', href=re.compile(r'tel:'))
             phones = set()
             for link in phone_links:
                 phone = link.get('href', '').replace('tel:', '').strip()
-                if phone and len(phone) > 5:  # Valid phone number
+                if phone and len(phone) > 5:
                     phones.add(phone)
             venue_data['phone'] = ', '.join(sorted(phones))
 
@@ -108,17 +155,13 @@ class ShadliqScraperV2:
             # 4. Extract address - look for map marker icon
             address_p = soup.find('i', class_='fa-map-marker')
             if address_p and address_p.parent:
-                # Get parent paragraph and extract just the address text
                 parent_text = address_p.parent.get_text(strip=True)
-                # Remove the icon and clean up
-                address = parent_text.strip()
-                # Remove "Müştəri Baxış Sayı" and any numbers after it
-                address = re.sub(r'Müştəri\s+Baxış\s+Sayı.*', '', address).strip()
-                # Remove phone numbers
+                # Clean up: remove views count and phone numbers
+                address = re.sub(r'Müştəri\s+Baxış\s+Sayı.*', '', parent_text).strip()
                 address = re.sub(r'(\+?994|0)[-\s]?\d{2}[-\s]?\d{3}[-\s]?\d{2}[-\s]?\d{2}', '', address).strip()
                 venue_data['address'] = address
 
-            # 5. Extract coordinates from JavaScript ae_globals
+            # 5. Extract coordinates from JavaScript
             for script in soup.find_all('script'):
                 if script.string and 'ae_globals' in script.string:
                     lat_match = re.search(r"'latitude'\s*:\s*'([^']+)'", script.string)
@@ -130,47 +173,25 @@ class ShadliqScraperV2:
                     break
 
             # 6. Extract views - look for strong tag with number
-            view_p = soup.find('p', text=re.compile(r'Müştəri\s+Baxış\s+Sayı', re.IGNORECASE))
-            if view_p:
-                strong = view_p.find('strong')
-                if strong:
-                    venue_data['views'] = self.extract_text_safe(strong)
+            for p in soup.find_all('p'):
+                p_text = p.get_text()
+                if 'Müştəri' in p_text and 'Baxış' in p_text:
+                    strong = p.find('strong')
+                    if strong:
+                        venue_data['views'] = self.extract_text_safe(strong)
+                    break
 
-            # 7. Extract price - look in specific price sections
-            # Try to find the venue's actual price, not related venues
-            price_found = False
-
-            # First try: Look in address_info section (most reliable)
-            address_info = soup.find('div', class_='address_info')
-            if address_info:
-                price_text = address_info.get_text()
-                price_match = re.search(r'(\d+)\s*(?:AZN|azn|₼)', price_text)
-                if price_match:
-                    venue_data['price_per_person'] = price_match.group(1)
-                    price_found = True
-
-            # Second try: Look in title or meta
-            if not price_found:
-                title = soup.find('title')
-                if title:
-                    title_text = title.get_text()
-                    # Look for price pattern in title
-                    price_match = re.search(r'(\d+)\s*(?:AZN|azn|₼)', title_text)
-                    if price_match:
-                        venue_data['price_per_person'] = price_match.group(1)
-
-            # 8. Extract hall names - look for text after "ZALLAR" or similar
+            # 7. Extract hall names
             page_text = soup.get_text()
             hall_pattern = r'ZALLAR[:\s]*([^\n]+(?:\n[^\n]+){0,3})'
             hall_match = re.search(hall_pattern, page_text, re.MULTILINE)
             if hall_match:
                 halls = hall_match.group(1).strip()
-                # Clean up hall names
                 halls = re.sub(r'TƏDBİRLƏR.*', '', halls).strip()
                 halls = re.sub(r'\.+', ', ', halls).strip()
                 venue_data['hall_names'] = halls[:200]
 
-            # 9. Extract event types - look for specific keywords
+            # 8. Extract event types
             events = set()
             event_keywords = ['Toy', 'Nişan', 'Xına', 'Ad günü', 'wedding', 'engagement']
             for keyword in event_keywords:
@@ -178,51 +199,45 @@ class ShadliqScraperV2:
                     events.add(keyword)
             venue_data['event_types'] = ', '.join(sorted(events))
 
-            # 10. Extract description from meta tag
+            # 9. Extract meta description
             meta_desc = soup.find('meta', {'name': 'description'})
             if meta_desc:
                 venue_data['meta_description'] = meta_desc.get('content', '')[:500]
 
-            # 11. Extract main description/content
-            # Look for main content paragraphs that aren't navigation or footer
+            # 10. Extract main description
             content_div = soup.find('div', class_=re.compile('single-detail|content|description'))
             if content_div:
-                # Get paragraphs with actual content
                 paragraphs = content_div.find_all('p', limit=5)
                 desc_parts = []
                 for p in paragraphs:
                     text = self.extract_text_safe(p)
-                    # Skip if it's address, phone, or views
                     if text and len(text) > 20 and not re.search(r'(Müştəri|Baxış|tel:|@)', text):
                         desc_parts.append(text)
                 venue_data['description'] = ' | '.join(desc_parts[:3])[:500]
 
-            # 12. Extract services/amenities - look for lists in content area
+            # 11. Extract services/amenities
             services = []
             service_lists = soup.find_all('ul', class_=re.compile('service|amenity|feature'))
-            for ul in service_lists[:2]:  # Limit to first 2 lists
+            for ul in service_lists[:2]:
                 items = ul.find_all('li')
-                for item in items[:10]:  # Limit items per list
+                for item in items[:10]:
                     text = self.extract_text_safe(item)
-                    if text and len(text) < 100:  # Reasonable length for a service item
+                    if text and len(text) < 100:
                         services.append(text)
             venue_data['services'] = '; '.join(services[:15])
 
-            # 13. Extract gallery images
+            # 12. Extract gallery images
             images = []
-            # Look for gallery or carousel images
             gallery = soup.find(['div', 'section'], class_=re.compile('gallery|carousel'))
             if gallery:
                 imgs = gallery.find_all('img', src=True)
-                for img in imgs[:15]:  # Limit to 15 images
+                for img in imgs[:15]:
                     src = img.get('src', '')
                     if src and 'upload' in src:
                         full_img_url = urljoin(self.base_url, src)
-                        # Get high-res version if it's a thumbnail
                         full_img_url = full_img_url.replace('/thumbs/', '/').replace('-270.jpg', '-1200.jpg')
                         images.append(full_img_url)
 
-            # Also check for featured images
             if not images:
                 imgs = soup.find_all('img', src=re.compile('upload'))
                 for img in imgs[:15]:
@@ -232,7 +247,7 @@ class ShadliqScraperV2:
                     if full_img_url not in images:
                         images.append(full_img_url)
 
-            venue_data['gallery_images'] = '; '.join(list(dict.fromkeys(images)))  # Remove duplicates
+            venue_data['gallery_images'] = '; '.join(list(dict.fromkeys(images)))
 
             time.sleep(1.5)  # Be polite to the server
             return venue_data
@@ -243,10 +258,10 @@ class ShadliqScraperV2:
 
     def scrape_all(self):
         """Main method to scrape all pages and venues"""
-        print("Starting improved scraper V2...")
+        print("Starting final scraper with listing page data extraction...")
         print("=" * 60)
 
-        # Step 1: Scrape all listing pages (1-5)
+        # Step 1: Scrape all listing pages (1-5) to get URLs AND prices
         all_venue_urls = []
         for page_num in range(1, 6):
             venue_urls = self.scrape_listing_page(page_num)
@@ -257,6 +272,7 @@ class ShadliqScraperV2:
         all_venue_urls = list(dict.fromkeys(all_venue_urls))
         print("\n" + "=" * 60)
         print(f"Total unique venues found: {len(all_venue_urls)}")
+        print(f"Listing data collected for: {len(self.listing_data)} venues")
         print("=" * 60 + "\n")
 
         # Step 2: Scrape each venue detail page
@@ -267,14 +283,14 @@ class ShadliqScraperV2:
 
             # Save progress every 10 venues
             if i % 10 == 0:
-                self.save_to_csv('shadliq_venues_v2_progress.csv')
+                self.save_to_csv('shadliq_venues_final_progress.csv')
                 print(f"  Progress saved ({i} venues scraped)")
 
         print("\n" + "=" * 60)
         print(f"Scraping completed! Total venues scraped: {len(self.venues)}")
         print("=" * 60)
 
-    def save_to_csv(self, filename='shadliq_venues_v2.csv'):
+    def save_to_csv(self, filename='shadliq_venues_final.csv'):
         """Save scraped data to CSV file"""
         if not self.venues:
             print("No data to save!")
@@ -283,9 +299,9 @@ class ShadliqScraperV2:
         print(f"\nSaving data to {filename}...")
 
         fieldnames = [
-            'url', 'name', 'phone', 'email', 'address', 'latitude', 'longitude',
-            'price_per_person', 'views', 'description', 'hall_names', 'services',
-            'event_types', 'gallery_images', 'meta_description'
+            'url', 'name', 'phone', 'email', 'address', 'location_short',
+            'latitude', 'longitude', 'price_per_person', 'views', 'description',
+            'hall_names', 'services', 'event_types', 'gallery_images', 'meta_description'
         ]
 
         with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
@@ -308,6 +324,6 @@ class ShadliqScraperV2:
         print(f"  - Venues with gallery: {sum(1 for v in self.venues if v.get('gallery_images'))}")
 
 if __name__ == "__main__":
-    scraper = ShadliqScraperV2()
+    scraper = ShadliqScraperFinal()
     scraper.scrape_all()
-    scraper.save_to_csv('shadliq_venues_v2_final.csv')
+    scraper.save_to_csv('shadliq_venues_complete.csv')
