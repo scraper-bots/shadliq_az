@@ -16,7 +16,7 @@ This comprehensive analysis examines **99 wedding venues** in Baku, Azerbaijan, 
 
 ## 📊 Chart 1: Price Distribution
 
-![Price Distribution](01_price_distribution.png)
+![Price Distribution](charts/01_price_distribution.png)
 
 ### Key Insights:
 
@@ -41,7 +41,7 @@ This comprehensive analysis examines **99 wedding venues** in Baku, Azerbaijan, 
 
 ## 📈 Chart 2: Price Range Categories
 
-![Price Categories](02_price_categories.png)
+![Price Categories](charts/02_price_categories.png)
 
 ### Key Insights:
 
@@ -72,7 +72,7 @@ This comprehensive analysis examines **99 wedding venues** in Baku, Azerbaijan, 
 
 ## 🏆 Chart 3: Top 20 Most Viewed Venues
 
-![Top Venues](03_top_venues_by_views.png)
+![Top Venues](charts/03_top_venues_by_views.png)
 
 ### Key Insights:
 
@@ -107,7 +107,7 @@ This comprehensive analysis examines **99 wedding venues** in Baku, Azerbaijan, 
 
 ## 🗺️ Chart 4: Geographic Distribution
 
-![Geographic Distribution](04_geographic_distribution.png)
+![Geographic Distribution](charts/04_geographic_distribution.png)
 
 ### Key Insights:
 
@@ -140,7 +140,7 @@ This comprehensive analysis examines **99 wedding venues** in Baku, Azerbaijan, 
 
 ## 📉 Chart 5: Price vs Views Correlation
 
-![Price vs Views](05_price_vs_views.png)
+![Price vs Views](charts/05_price_vs_views.png)
 
 ### Key Insights:
 
@@ -180,7 +180,7 @@ This comprehensive analysis examines **99 wedding venues** in Baku, Azerbaijan, 
 
 ## 📍 Chart 6: Location Distribution
 
-![Location Distribution](06_location_distribution.png)
+![Location Distribution](charts/06_location_distribution.png)
 
 ### Key Insights:
 
@@ -221,7 +221,7 @@ This comprehensive analysis examines **99 wedding venues** in Baku, Azerbaijan, 
 
 ## 🎉 Chart 7: Event Types Distribution
 
-![Event Types](07_event_types.png)
+![Event Types](charts/07_event_types.png)
 
 ### Key Insights:
 
