@@ -260,7 +260,7 @@ This comprehensive analysis examines **99 wedding venues** in Baku, Azerbaijan, 
 
 ## ✅ Chart 8: Data Completeness
 
-![Data Completeness](08_data_completeness.png)
+![Data Completeness](charts/08_data_completeness.png)
 
 ### Key Insights:
 
@@ -304,7 +304,7 @@ This comprehensive analysis examines **99 wedding venues** in Baku, Azerbaijan, 
 
 ## 📦 Chart 9: Price by Location
 
-![Price by Location](09_price_by_location.png)
+![Price by Location](charts/09_price_by_location.png)
 
 ### Key Insights:
 
@@ -348,7 +348,7 @@ This comprehensive analysis examines **99 wedding venues** in Baku, Azerbaijan, 
 
 ## 📊 Chart 10: Popularity Distribution
 
-![Popularity Distribution](10_popularity_distribution.png)
+![Popularity Distribution](charts/10_popularity_distribution.png)
 
 ### Key Insights:
 
